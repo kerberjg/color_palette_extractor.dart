@@ -39,6 +39,8 @@ dart pub get color_palette_extractor
 #### Coming up next
 
 - **More configuration options** for customizing the color extraction process
+- **Faster processing**, aiming for realtime 60FPS on 512x512 images
+- **HTTP server** example for interfacing with Home Assistant & etc.
 
 ---
 

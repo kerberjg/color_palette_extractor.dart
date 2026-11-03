@@ -1,0 +1,7 @@
+package_name=color_palette_extractor
+package_description=Dart package + apps for color palette extraction
+github_username=kerberjg
+repo_name=color_palette_extractor.dart
+author_name=Jamie Kerber
+author_email=kerber.jg@gmail.com
+pubdev_username=kerberjg.dev

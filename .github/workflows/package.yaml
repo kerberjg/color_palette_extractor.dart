@@ -1,0 +1,24 @@
+name: "package"
+
+on:
+  schedule:
+    - cron: "0 12 * * 3"
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+      - "release/**"
+    paths:
+      - "**.dart"
+      - "./*.yaml"
+      - .github/workflows/package.yaml
+  release:
+    types: [published]
+
+# call the base workflow with the package path
+jobs:
+  package:
+    uses: moonfeather-collective/dart_flutter_ci/.github/workflows/pipeline.yaml@v1
+    with:
+      path: "./"

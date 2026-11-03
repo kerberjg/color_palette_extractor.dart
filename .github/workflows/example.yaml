@@ -1,0 +1,27 @@
+name: "example"
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+      - "release/**"
+    paths:
+      - "example/**/*.dart"
+      - "example/**/*.yaml"
+      - "**.dart"
+      - "./*.yaml"
+      - .github/workflows/example.yaml
+  release:
+    types: [published]
+
+jobs:
+  example:
+    strategy:
+      matrix:
+        example: [basic, advanced_example]
+    name: ${{ matrix.example }}
+    uses: moonfeather-collective/dart_flutter_ci/.github/workflows/pipeline.yaml@v1
+    with:
+      path: "example/${{ matrix.example }}"

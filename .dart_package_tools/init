@@ -1,0 +1,101 @@
+#!/bin/bash
+
+# This script is meant to be run once after cloning the repo, to set up the package with the correct name and other details.
+
+# Ask for package name
+read -p "Enter the package name (e.g. my_package): " package_name
+# Ask for repo name (if different from package name)
+read -p "Enter the repository name (leave blank if same as package name): " repo_name
+# Ask for package description
+read -p "Enter the package description: " package_description
+# Ask for author full name
+read -p "Enter the author full name: " author_name
+# Ask for author email
+read -p "Enter the author email: " author_email
+# Ask for GitHub username
+read -p "Enter the GitHub username: " github_username
+# Ask for pub.dev publisher name
+read -p "Enter the pub.dev publisher name: " pubdev_username
+
+
+# Step 1: Update README.md
+sed -i '' "s/\${package_name}/$package_name/g" README.md
+sed -i '' "s/\${package_description}/$package_description/g" README.md
+sed -i '' "s/\${github_username}/$github_username/g" README.md
+sed -i '' "s/\${repo_name}/$repo_name/g" README.md
+sed -i '' "s/\${package_name}/$package_name/g" README.md
+
+# (remove everything between <!-- template:out --> and <!-- /template:out -->, inclusive)
+sed -i '' '/<!-- template:out -->/,/<!-- \/template:out -->/d' README.md
+
+# (remove lines with `<!-- template:in` and `/template:in -->`)
+sed -i '' '/<!-- template:in/d' README.md
+sed -i '' '/\/template:in -->/d' README.md
+
+
+
+# Step 2: Update all pubspec.yaml files
+# (replace description by lines starting with `description: `)
+find . -name "pubspec.yaml" -exec sed -i '' "s/description: .*/description: $package_description/g" {} \;
+
+# (set the version to 0.0.1)
+find . -name "pubspec.yaml" -exec sed -i '' "s/version: .*/version: 0.0.1/g" {} \;
+
+# (replace all git URLs by ones with the correct repo name and GitHub username
+git_url="https://github.com/kerberjg/dart_package_template"
+new_git_url="https://github.com/$github_username/$repo_name"
+find . -name "pubspec.yaml" -exec sed -i '' "s|$git_url|$new_git_url|g" {} \;
+
+# (replace all occurrences of name)
+find . -name "pubspec.yaml" -exec sed -i '' "s/dart_package_template/$package_name/g" {} \;
+
+
+
+# Step 3: Update all source files
+# (replace all occurrences of name)
+find . -name "*.dart" -exec sed -i '' "s/dart_package_template/$package_name/g" {} \;
+
+# (rename all files with dart_package_template in the name)
+find . -name "*dart_package_template*" -exec bash -c 'mv "$0" "${0//dart_package_template/'"$package_name"'}"' {} \;
+
+
+
+# Step 4: Delete and recreate CHANGELOG.md
+rm CHANGELOG.md
+cat > CHANGELOG.md <<EOL
+## 0.0.1
+
+- Initial release
+EOL
+
+
+
+# Step 5: cleanup
+rm ./init
+echo "package_name=$package_name" >> .dart_package_config
+echo "package_description=$package_description" >> .dart_package_config
+echo "github_username=$github_username" >> .dart_package_config
+echo "repo_name=$repo_name" >> .dart_package_config
+echo "author_name=$author_name" >> .dart_package_config
+echo "author_email=$author_email" >> .dart_package_config
+echo "pubdev_username=$pubdev_username" >> .dart_package_config
+
+
+
+# End: print success message
+echo "Package initialized successfully! Please review the changes and commit them to your repository."
+
+echo "Name: $package_name"
+echo "Description: $package_description"
+echo "GitHub repo: $new_git_url"
+echo "Author: $author_name <$author_email>"
+echo "pub.dev publisher: $pubdev_username"
+
+echo "Next steps:"
+echo "1. Update the README.md with:
+    - Use cases
+    - Features
+    - Usage Guide
+"
+echo "2. Update the version number and changelog for the first release"
+echo "3. Publish to pub.dev"

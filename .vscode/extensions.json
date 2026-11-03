@@ -1,0 +1,14 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=827846
+    // for the documentation about the extensions.json format
+    "recommendations": [
+        // template:start
+        "dart-code.dart-code",
+        "github.vscode-github-actions",
+        "me-dutour-mathieu.vscode-github-actions",
+        "redhat.vscode-yaml",
+        "DavidAnson.vscode-markdownlint",
+        "jkiviluoto.tws",
+        // /template:end
+    ]
+}

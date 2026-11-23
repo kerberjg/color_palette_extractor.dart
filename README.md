@@ -38,6 +38,7 @@ dart pub get color_palette_extractor
 
 #### Coming up next
 
+- **Cleaner API**: less reliance on custom color classes
 - **More configuration options** for customizing the color extraction process
 - **Faster processing**, aiming for realtime 60FPS on 512x512 images
 - **HTTP server** example for interfacing with Home Assistant & etc.
@@ -48,15 +49,28 @@ dart pub get color_palette_extractor
 
 ### Getting Started
 
-TODO
+Install the package using Dart's package manager:
 
-### Development & Maintenance
+```bash
+dart pub get color_palette_extractor
+```
 
-TODO
+Just import the package in your Dart code and call the color extractor.
+Use with the [`image`](https://pub.dev/packages/image) package for handling image files.
 
-### Next steps
+```dart
+import 'package:image/image.dart';
+import 'package:color_palette_extractor/color_palette_extractor.dart';
 
-TODO
+...
+
+final image = ...; // open file or decode from a Uint8List
+final colors = extractPalette(image, paletteSize: 6);
+```
+
+The returned colors are using the `OKLCH` color space (see the [`oklch`](https://pub.dev/packages/oklch) package). The palette uses a `OKLCHColorX` extension containing `int frequency` for each color. This allows you to know how dominant each color is within the extracted palette.
+
+See the [`color_palette_ui`](example/color_palette_ui) example for usage of the color palette extractor in a UI context 🩵
 
 ---
 

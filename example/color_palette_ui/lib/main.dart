@@ -5,6 +5,7 @@ import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
+import 'package:oklch/oklch.dart';
 
 void main() {
   runApp(const MyApp());
@@ -29,7 +30,8 @@ class PaletteScreen extends StatefulWidget {
   State<PaletteScreen> createState() => _PaletteScreenState();
 }
 
-ValueNotifier<List<OKLCHColorX>> palette = ValueNotifier<List<OKLCHColorX>>([]);
+ValueNotifier<Map<OKLCHColor, int>> palette =
+    ValueNotifier<Map<OKLCHColor, int>>({});
 
 class _PaletteScreenState extends State<PaletteScreen> {
   final ImagePicker _picker = ImagePicker();
@@ -49,7 +51,8 @@ class _PaletteScreenState extends State<PaletteScreen> {
             img.decodeImage(await File(picked.path).readAsBytes());
         if (decoded != null) {
           DateTime start = DateTime.now();
-          final List<OKLCHColorX> extracted = extractPalette(decoded);
+          final Map<OKLCHColor, int> extracted =
+              extractPaletteWithFrequencies(decoded);
           palette.value = extracted;
           DateTime end = DateTime.now();
           print(
@@ -105,9 +108,9 @@ class _PaletteScreenState extends State<PaletteScreen> {
             ListenableBuilder(
                 listenable: palette,
                 builder: (context, _) {
-                  final int totalFrequency = palette.value.fold<int>(
+                  final int totalFrequency = palette.value.values.fold<int>(
                     0,
-                    (sum, color) => sum + color.frequency,
+                    (sum, frequency) => sum + frequency,
                   );
 
                   return Expanded(
@@ -115,13 +118,13 @@ class _PaletteScreenState extends State<PaletteScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: <Widget>[
-                          for (final OKLCHColorX color
-                              in palette.value) ...<Widget>[
+                          for (final MapEntry<OKLCHColor, int> entry
+                              in palette.value.entries) ...<Widget>[
                             Expanded(
                                 child: ColorSwatch(
-                                    color: color,
+                                    color: entry.key,
                                     totalFrequency: totalFrequency)),
-                            if (color != palette.value.last)
+                            if (entry != palette.value.entries.last)
                               const SizedBox(width: 12),
                           ],
                         ],
@@ -215,7 +218,7 @@ class ColorSwatch extends StatelessWidget {
   const ColorSwatch(
       {super.key, required this.color, required this.totalFrequency});
 
-  final OKLCHColorX color;
+  final OKLCHColor color;
   final int totalFrequency;
 
   @override
@@ -232,7 +235,7 @@ class ColorSwatch extends StatelessWidget {
         child: SelectableText(
           '${hexCode(rgb)}\n'
           '${color.toString()}\n'
-          '${(color.frequency / totalFrequency * 100).toStringAsFixed(0)}%',
+          '${(palette.value[color]! / totalFrequency * 100).toStringAsFixed(0)}%',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 12,

@@ -6,62 +6,122 @@ import 'dart:ui' show Color;
 import 'package:image/image.dart' as img;
 import 'package:oklch/oklch.dart';
 
-List<OKLCHColorX> extractPalette(img.Image file, {int paletteSize = 6}) {
-  const int COLOR_AXIS_BUCKETS = 7; // NOTE: this HAS to be an odd number
-  const int MAX_INDEX = COLOR_AXIS_BUCKETS - 1;
+/// Axis size for the 3D bucket grid of colors.
+/// This determines how finely the color space is divided into discrete buckets.
+/// It MUST be an odd number to ensure a center for each axis.
+const int kColorBucketsAxisSize = 7;
+
+/// The factor by which to exaggerate the chroma of palette colors when [exaggerateChroma] is true.
+const double kChromaExaggerationFactor = 1.33;
+
+/// Given an [img.Image] file, extracts the palette of themost dominant colors.
+///
+/// Returns a [List] of length [paletteSize] containing the most dominant colors extracted from the image.
+List<OKLCHColor> extractPalette(
+  /// The image file to extract the palette from.
+  img.Image file, {
+
+  /// The number of colors to extract for the palette.
+  int paletteSize = 6,
+
+  /// Whether to exaggerate the palette colors.
+  bool exaggerateChroma = false,
+
+  /// Whether to sort the resulting palette by frequency.
+  /// If false, will sort by visual similarity.
+  bool sortByFrequency = false,
+}) {
+  final Map<OKLCHColor, int> frequencies = extractPaletteWithFrequencies(
+    file,
+    paletteSize: paletteSize,
+    exaggerateChroma: exaggerateChroma,
+  );
+
+  if (sortByFrequency) {
+    // dart format off
+    return ( //
+      frequencies.entries.toList() //
+      ..sort((a, b) => b.value.compareTo(a.value)) //
+    ).map((e) => e.key).toList();
+    // dart format on
+  } else {
+    return frequencies.keys.toList();
+  }
+}
+
+/// Given an [img.Image] file, extracts the palette of themost dominant colors.
+///
+/// Returns a [Map] where the keys are the palette colors and the values are their frequencies.
+Map<OKLCHColor, int> extractPaletteWithFrequencies(
+  /// The image file to extract the palette from.
+  img.Image file, {
+
+  /// The number of colors to extract for the palette.
+  int paletteSize = 6,
+
+  /// Whether to exaggerate the palette colors.
+  bool exaggerateChroma = false,
+}) {
+  final int maxAxisIndex = kColorBucketsAxisSize - 1;
+
+  // Discrete 3D array of color buckets.
+  // Each axis corresponds to one of the 3 color components.
   List<List<OKLCHColor>> lchBuckets = List.generate(
-    COLOR_AXIS_BUCKETS * COLOR_AXIS_BUCKETS * COLOR_AXIS_BUCKETS, //
+    kColorBucketsAxisSize * kColorBucketsAxisSize * kColorBucketsAxisSize, //
     (_) => List.empty(growable: true),
     growable: false,
   );
 
-  final int sampleWidth = paletteSize - 2;
+  // Number of pre-palette samples
+  final int sampleCount = paletteSize - 2;
 
-  // print(lchBuckets);
-
-  // (handle gifs)
+  // Handle animated images
   for (img.Image frame in file.frames) {
     // Get image pixels and distribute in discrete buckets
     for (img.Pixel px in frame) {
       // discard sub-alpha pixels
       if (px.a < 255) continue;
 
-      OKLCHColor lch = OKLCHColor.fromColor(Color.from(
-        alpha: 1,
-        red: px.r / 255,
-        green: px.g / 255,
-        blue: px.b / 255,
-      ));
+      OKLCHColor lch = OKLCHColor.fromColor(
+        Color.from(
+          alpha: 1,
+          red: px.r / 255,
+          green: px.g / 255,
+          blue: px.b / 255,
+        ),
+      );
 
-      int x = (lch.l * MAX_INDEX).round();
-      int y = (lch.c * MAX_INDEX).round();
-      int z = (lch.h * MAX_INDEX).round();
+      int x = (lch.l * maxAxisIndex).round();
+      int y = (lch.c * maxAxisIndex).round();
+      int z = (lch.h * maxAxisIndex).round();
 
       lchBuckets.at3D(x, y, z).add(lch);
     }
   }
 
-  // Sort by frequency (descending)
+  // Sort by occupancy (descending)
   lchBuckets.sort((a, b) => b.length.compareTo(a.length));
 
-  // Calculate mode for all non-empty buckets
-  Map<int, int> modeCounts = {};
-  List<OKLCHColorX> modes = [];
+  // Sample mean color for all non-empty buckets
+  // Map<int, int> modeCounts = {}; // max size: lchBuckets.length
+  List<_OKLCHColorX> bucketMeans = [];
   for (List<OKLCHColor> bucket in lchBuckets) {
     if (bucket.isNotEmpty) {
-      OKLCHColor mode = modeColor(bucket);
-      modes.add(mode.withFrequency(bucket.length));
-      modeCounts[mode.hashCode] = max(
-        modeCounts[mode.hashCode] ?? 0,
-        bucket.length,
-      );
+      OKLCHColor mode = _groupedMeanColor(bucket);
+      bucketMeans.add(mode.withFrequency(bucket.length));
+      // modeCounts[mode.hashCode] = max(
+      //   modeCounts[mode.hashCode] ?? 0,
+      //   bucket.length,
+      // );
     }
   }
 
-  OKLCHColorX totalMode = modeColor(modes);
+  _OKLCHColorX averageColor = _groupedMeanColor(bucketMeans);
 
-  // Get top 2x candidates
-  List<OKLCHColorX> candidates = modes.take(sampleWidth * 2).toList();
+  // Sample top 2x candidates from all buckets
+  // This is done to ensure we have varied-enough candidates for diversity selection.
+  // Sampling just `sampleCount` failed manual testing.
+  List<_OKLCHColorX> candidates = bucketMeans.take(sampleCount * 2).toList();
 
   // Sort candidates by distance from each other (maximize diversity)
   // candidates.sort((a, b) {
@@ -77,7 +137,7 @@ List<OKLCHColorX> extractPalette(img.Image file, {int paletteSize = 6}) {
   //   return distB.compareTo(distA);
   // });
 
-  // Sort candidates by distance from the total mode (maximize diversity)
+  // Sort candidates by distance from the global average color (maximize diversity)
   candidates.sort((a, b) {
     double distance(OKLCHColor c1, OKLCHColor c2) {
       double dl = c1.lightness - c2.lightness;
@@ -86,19 +146,18 @@ List<OKLCHColorX> extractPalette(img.Image file, {int paletteSize = 6}) {
       return sqrt(dl * dl + dc * dc + dh * dh);
     }
 
-    double distA = distance(a, totalMode);
-    double distB = distance(b, totalMode);
+    double distA = distance(a, averageColor);
+    double distB = distance(b, averageColor);
     return distB.compareTo(distA); // descending order
   });
 
   // Invert order to match the original frequency order
-  List<OKLCHColorX> palette = candidates.take(sampleWidth).toList();
-  palette.add(modes.first);
-  palette.add(candidates[sampleWidth]);
+  List<_OKLCHColorX> palette = candidates.take(sampleCount).toList();
+  palette.add(bucketMeans.first); //
+  palette.add(candidates[sampleCount]);
   palette.add(candidates.last);
-  // palette.add(candidates[candidates.length - 2]);
 
-  // OKLCHColorX newMode = modeColor(palette);
+  // _OKLCHColorX newMode = _groupedMeanColor(palette);
   // // Sort by distance from each other (doubles close)
   // palette.sort((a, b) {
   //   return modeCounts[b.hashCode]!.compareTo(modeCounts[a.hashCode]!);
@@ -110,6 +169,9 @@ List<OKLCHColorX> extractPalette(img.Image file, {int paletteSize = 6}) {
   // Remove top (likely duplicate)
   palette.removeAt(0);
 
+  // Stacked sort: the intent is to sort the colors by visual similarity.
+  // This sort order was determined by experimentation.
+
   // sort by chroma
   palette.sort((a, b) => a.chroma.compareTo(b.chroma));
   // sort by lightness
@@ -119,19 +181,21 @@ List<OKLCHColorX> extractPalette(img.Image file, {int paletteSize = 6}) {
 
   // Exaggerate the chromas
   for (int i = 0; i < palette.length; i++) {
-    palette[i] = OKLCHColorX(
+    palette[i] = _OKLCHColorX(
       palette[i].lightness,
-      palette[i].chroma * 1.33,
+      palette[i].chroma * (exaggerateChroma ? kChromaExaggerationFactor : 1),
       palette[i].hue,
       palette[i].frequency,
     );
   }
 
-  return palette;
+  return Map.fromEntries(
+    palette.map((color) => MapEntry(color, color.frequency)),
+  );
 }
 
-OKLCHColorX modeColor(List<OKLCHColor> bucket) {
-  // just kidding, do a mean
+/// Calculates the mean color of a given bucket, weighted by frequency.
+_OKLCHColorX _groupedMeanColor(List<OKLCHColor> bucket) {
   double accL = 0;
   double accC = 0;
   double accH = 0;
@@ -140,21 +204,24 @@ OKLCHColorX modeColor(List<OKLCHColor> bucket) {
   int frequency = 0;
 
   for (int i = 0; i < bucket.length; i++) {
-    frequency = bucket[i] is OKLCHColorX //
-        ? (bucket[i] as OKLCHColorX).frequency
-        : 1;
-    // double weight = (1 + bucket[i].chroma * 4);
-    // double weight = frequency.toDouble();
+    frequency =
+        bucket[i]
+                is _OKLCHColorX //
+            ? (bucket[i] as _OKLCHColorX).frequency
+            : 1;
+
+    // NOTE: also previously tried:
+    // - weighted by extreme chromas
+    // - weighted by frequency
     double weight = 1;
 
     accL += bucket[i].lightness * weight;
     accC += bucket[i].chroma * weight;
     accH += bucket[i].hue * weight;
-    // importance: weighted by extreme chromas
     count += weight;
   }
 
-  return OKLCHColorX(
+  return _OKLCHColorX(
     accL / count,
     accC / count,
     accH / count, //
@@ -162,9 +229,10 @@ OKLCHColorX modeColor(List<OKLCHColor> bucket) {
   );
 }
 
-const int MAX_INT = 0x7FFFFFFFFFFFFFFF;
-
-extension List3D<T> on List<T> {
+/// Extension on [List] to provide 3D indexing.
+/// Assumes the list represents a cube with equal dimensions along each axis.
+extension _List3D<T> on List<T> {
+  /// Access element at 3D index (x, y, z).
   T at3D(int x, int y, int z) {
     // print('accessing 3D index: ($x, $y, $z)');
     // axis size (assuming cube)
@@ -178,23 +246,28 @@ extension List3D<T> on List<T> {
   }
 }
 
-class OKLCHColorX extends OKLCHColor {
+/// Extended [OKLCHColor] with frequency information.
+/// To be used with [_groupedMeanColor].
+class _OKLCHColorX extends OKLCHColor {
+  /// Frequency of occurrence of the color in its given set.
   final int frequency;
 
-  OKLCHColorX(
-    super.lightness,
-    super.chroma,
-    super.hue,
-    this.frequency,
-  ) : super();
+  _OKLCHColorX(super.lightness, super.chroma, super.hue, this.frequency)
+    : super();
 }
 
-extension OKLCHColorExtension on OKLCHColor {
+/// Extension on [OKLCHColor] to provide axis-normalized values and frequency handling.
+extension _OKLCHColorExtension on OKLCHColor {
+  /// Axis-normalized lightness.
   double get l => lightness;
+
+  /// Axis-normalized chroma.
   double get h => hue / 360.0;
+
+  /// Axis-normalized hue.
   double get c => chroma * 2.0;
 
-  OKLCHColorX withFrequency(int frequency) {
-    return OKLCHColorX(lightness, chroma, hue, frequency);
+  _OKLCHColorX withFrequency(int frequency) {
+    return _OKLCHColorX(lightness, chroma, hue, frequency);
   }
 }

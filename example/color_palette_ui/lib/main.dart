@@ -52,7 +52,7 @@ class _PaletteScreenState extends State<PaletteScreen> {
         if (decoded != null) {
           DateTime start = DateTime.now();
           final Map<OKLCHColor, int> extracted =
-              extractPaletteWithFrequencies(decoded);
+              extractPaletteWithFrequencies(decoded, exaggerateChroma: true);
           palette.value = extracted;
           DateTime end = DateTime.now();
           print(
@@ -104,7 +104,10 @@ class _PaletteScreenState extends State<PaletteScreen> {
                 ),
               ),
             ),
-            const Divider(height: 1),
+            Divider(
+              height: 1,
+              color: CupertinoColors.systemGrey4.resolveFrom(context),
+            ),
             ListenableBuilder(
                 listenable: palette,
                 builder: (context, _) {
@@ -153,10 +156,10 @@ class _ImagePickerButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(color: CupertinoColors.systemGrey4),
-        borderRadius: BorderRadius.circular(12),
-        color: CupertinoColors.systemGrey6,
-      ),
+          border: Border.all(
+              color: CupertinoColors.systemGrey4.resolveFrom(context)),
+          borderRadius: BorderRadius.circular(12),
+          color: CupertinoColors.systemGrey6.resolveFrom(context)),
       child: SizedBox.expand(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -167,14 +170,14 @@ class _ImagePickerButton extends StatelessWidget {
               Icon(
                 CupertinoIcons.photo,
                 size: 42,
-                color: CupertinoColors.systemGrey,
+                color: CupertinoColors.systemGrey.resolveFrom(context),
               ),
             const SizedBox(height: 12),
             Text(
               busy ? 'Opening…' : 'Choose an image',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 17,
-                color: CupertinoColors.label,
+                color: CupertinoColors.label.resolveFrom(context),
               ),
             ),
           ],

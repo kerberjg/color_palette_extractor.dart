@@ -2,7 +2,7 @@
 
 # color_palette_extractor
 
-🎨👩‍🎨 Dart package + apps for color palette extraction
+🎨👩‍🎨 Dart package + apps for color palette extraction from images
 
 ```bash
 dart pub get color_palette_extractor

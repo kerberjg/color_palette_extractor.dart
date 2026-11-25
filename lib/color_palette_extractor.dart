@@ -14,9 +14,17 @@ const int kColorBucketsAxisSize = 7;
 /// The factor by which to exaggerate the chroma of palette colors when [exaggerateChroma] is true.
 const double kChromaExaggerationFactor = 1.33;
 
-/// Given an [img.Image] file, extracts the palette of themost dominant colors.
+/// Given an [img.Image] file, extracts the palette of the most dominant colors.
 ///
-/// Returns a [List] of length [paletteSize] containing the most dominant colors extracted from the image.
+/// Returns a [List] of length [paletteSize] containing the most dominant colors
+/// extracted from the image.
+///
+/// If the image has fewer than [paletteSize] distinct opaque color buckets
+/// (including empty or fully transparent images), the remaining entries are
+/// padded with transparent black (`RGBA(0, 0, 0, 0)`, i.e.
+/// `OKLCHColor(0, 0, 0, 0)`).
+///
+/// Throws a [RangeError] if [paletteSize] is negative.
 List<OKLCHColor> extractPalette(
   /// The image file to extract the palette from.
   img.Image file, {
@@ -49,9 +57,17 @@ List<OKLCHColor> extractPalette(
   }
 }
 
-/// Given an [img.Image] file, extracts the palette of themost dominant colors.
+/// Given an [img.Image] file, extracts the palette of the most dominant colors.
 ///
-/// Returns a [Map] where the keys are the palette colors and the values are their frequencies.
+/// Returns a [Map] of length [paletteSize] where the keys are the palette
+/// colors and the values are their frequencies.
+///
+/// If the image has fewer than [paletteSize] distinct opaque color buckets
+/// (including empty or fully transparent images), the remaining entries are
+/// padded with transparent black (`RGBA(0, 0, 0, 0)`, i.e.
+/// `OKLCHColor(0, 0, 0, 0)`) with a frequency of `0`.
+///
+/// Throws a [RangeError] if [paletteSize] is negative.
 Map<OKLCHColor, int> extractPaletteWithFrequencies(
   /// The image file to extract the palette from.
   img.Image file, {
@@ -62,6 +78,11 @@ Map<OKLCHColor, int> extractPaletteWithFrequencies(
   /// Whether to exaggerate the palette colors.
   bool exaggerateChroma = false,
 }) {
+  RangeError.checkNotNegative(paletteSize, 'paletteSize');
+  if (paletteSize == 0) {
+    return {};
+  }
+
   final int maxAxisIndex = kColorBucketsAxisSize - 1;
 
   // Discrete 3D array of color buckets.
@@ -116,58 +137,64 @@ Map<OKLCHColor, int> extractPaletteWithFrequencies(
     }
   }
 
-  _OKLCHColorX averageColor = _groupedMeanColor(bucketMeans);
+  final List<_OKLCHColorX> palette;
 
-  // Sample top 2x candidates from all buckets
-  // This is done to ensure we have varied-enough candidates for diversity selection.
-  // Sampling just `sampleCount` failed manual testing.
-  List<_OKLCHColorX> candidates = bucketMeans.take(sampleCount * 2).toList();
+  if (bucketMeans.length <= paletteSize || paletteSize <= 3) {
+    palette = bucketMeans.take(paletteSize).toList();
+  } else {
+    _OKLCHColorX averageColor = _groupedMeanColor(bucketMeans);
 
-  // Sort candidates by distance from each other (maximize diversity)
-  // candidates.sort((a, b) {
-  //   double distance(OKLCHColor c1, OKLCHColor c2) {
-  //     double dl = c1.lightness - c2.lightness;
-  //     double dc = c1.chroma - c2.chroma;
-  //     double dh = c1.hue - c2.hue;
-  //     return sqrt(dl * dl + dc * dc + dh * dh);
-  //   }
+    // Sample top 2x candidates from all buckets
+    // This is done to ensure we have varied-enough candidates for diversity selection.
+    // Sampling just `sampleCount` failed manual testing.
+    List<_OKLCHColorX> candidates = bucketMeans.take(sampleCount * 2).toList();
 
-  //   double distA = candidates.fold(0.0, (sum, c) => sum + distance(a, c));
-  //   double distB = candidates.fold(0.0, (sum, c) => sum + distance(b, c));
-  //   return distB.compareTo(distA);
-  // });
+    // Sort candidates by distance from each other (maximize diversity)
+    // candidates.sort((a, b) {
+    //   double distance(OKLCHColor c1, OKLCHColor c2) {
+    //     double dl = c1.lightness - c2.lightness;
+    //     double dc = c1.chroma - c2.chroma;
+    //     double dh = c1.hue - c2.hue;
+    //     return sqrt(dl * dl + dc * dc + dh * dh);
+    //   }
 
-  // Sort candidates by distance from the global average color (maximize diversity)
-  candidates.sort((a, b) {
-    double distance(OKLCHColor c1, OKLCHColor c2) {
-      double dl = c1.lightness - c2.lightness;
-      double dc = c1.chroma - c2.chroma;
-      double dh = c1.hue - c2.hue;
-      return sqrt(dl * dl + dc * dc + dh * dh);
-    }
+    //   double distA = candidates.fold(0.0, (sum, c) => sum + distance(a, c));
+    //   double distB = candidates.fold(0.0, (sum, c) => sum + distance(b, c));
+    //   return distB.compareTo(distA);
+    // });
 
-    double distA = distance(a, averageColor);
-    double distB = distance(b, averageColor);
-    return distB.compareTo(distA); // descending order
-  });
+    // Sort candidates by distance from the global average color (maximize diversity)
+    candidates.sort((a, b) {
+      double distance(OKLCHColor c1, OKLCHColor c2) {
+        double dl = c1.lightness - c2.lightness;
+        double dc = c1.chroma - c2.chroma;
+        double dh = c1.hue - c2.hue;
+        return sqrt(dl * dl + dc * dc + dh * dh);
+      }
 
-  // Invert order to match the original frequency order
-  List<_OKLCHColorX> palette = candidates.take(sampleCount).toList();
-  palette.add(bucketMeans.first); //
-  palette.add(candidates[sampleCount]);
-  palette.add(candidates.last);
+      double distA = distance(a, averageColor);
+      double distB = distance(b, averageColor);
+      return distB.compareTo(distA); // descending order
+    });
 
-  // _OKLCHColorX newMode = _groupedMeanColor(palette);
-  // // Sort by distance from each other (doubles close)
-  // palette.sort((a, b) {
-  //   return modeCounts[b.hashCode]!.compareTo(modeCounts[a.hashCode]!);
-  // });
+    // Invert order to match the original frequency order
+    palette = candidates.take(sampleCount).toList();
+    palette.add(bucketMeans.first); //
+    palette.add(candidates[sampleCount]);
+    palette.add(candidates.last);
 
-  // Sort by frequency (descending)
-  palette.sort((a, b) => b.frequency.compareTo(a.frequency));
+    // _OKLCHColorX newMode = _groupedMeanColor(palette);
+    // // Sort by distance from each other (doubles close)
+    // palette.sort((a, b) {
+    //   return modeCounts[b.hashCode]!.compareTo(modeCounts[a.hashCode]!);
+    // });
 
-  // Remove top (likely duplicate)
-  palette.removeAt(0);
+    // Sort by frequency (descending)
+    palette.sort((a, b) => b.frequency.compareTo(a.frequency));
+
+    // Remove top (likely duplicate)
+    palette.removeAt(0);
+  }
 
   // Stacked sort: the intent is to sort the colors by visual similarity.
   // This sort order was determined by experimentation.
@@ -189,9 +216,18 @@ Map<OKLCHColor, int> extractPaletteWithFrequencies(
     );
   }
 
-  return Map.fromEntries(
-    palette.map((color) => MapEntry(color, color.frequency)),
+  final Map<OKLCHColor, int> result = Map.fromEntries(
+    palette.map((color) => MapEntry<OKLCHColor, int>(color, color.frequency)),
   );
+
+  // Pad missing entries with transparent black (RGBA(0, 0, 0, 0)) so the
+  // returned palette always has length `paletteSize`.
+  // `OKLCHColor.fromOKLCH` allocates a distinct instance per padding slot.
+  while (result.length < paletteSize) {
+    result[OKLCHColor.fromOKLCH(0, 0, 0, 0)] = 0;
+  }
+
+  return result;
 }
 
 /// Calculates the mean color of a given bucket, weighted by frequency.

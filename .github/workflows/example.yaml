@@ -20,7 +20,7 @@ jobs:
   example:
     strategy:
       matrix:
-        example: [basic, advanced_example]
+        example: [color_palette_ui]
     name: ${{ matrix.example }}
     uses: moonfeather-collective/dart_flutter_ci/.github/workflows/pipeline.yaml@v1
     with:

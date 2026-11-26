@@ -9,11 +9,14 @@ issue_tracker: https://github.com/kerberjg/color_palette_extractor.dart/issues
 
 environment:
   sdk: ">=3.7.0 <4.0.0"
-  flutter: ">=3.0.0"
 
 dependencies:
   image: ^4.12.0
-  oklch: ^1.0.1
+  oklch_dart:
+    git:
+      url: https://github.com/kerberjg/oklch.git
+      path: packages/oklch_dart
+      ref: feature/flutter-split
 
 dev_dependencies:
   lints: ^6.1.0

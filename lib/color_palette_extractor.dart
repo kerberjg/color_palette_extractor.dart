@@ -1,10 +1,9 @@
 library;
 
 import 'dart:math';
-import 'dart:ui' show Color;
 
 import 'package:image/image.dart' as img;
-import 'package:oklch/oklch.dart';
+import 'package:oklch_dart/oklch_dart.dart';
 
 /// Axis size for the 3D bucket grid of colors.
 /// This determines how finely the color space is divided into discrete buckets.
@@ -82,13 +81,8 @@ Map<OKLCHColor, int> extractPaletteWithFrequencies(
       // discard sub-alpha pixels
       if (px.a < 255) continue;
 
-      OKLCHColor lch = OKLCHColor.fromColor(
-        Color.from(
-          alpha: 1,
-          red: px.r / 255,
-          green: px.g / 255,
-          blue: px.b / 255,
-        ),
+      OKLCHColor lch = OKLCHColor.fromColorData(
+        ColorData(px.r / 255, px.g / 255, px.b / 255, 1),
       );
 
       int x = (lch.l * maxAxisIndex).round();

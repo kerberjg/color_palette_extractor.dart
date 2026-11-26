@@ -19,6 +19,8 @@ The parameters are as follows:
 
 #### Easy: Docker image
 
+Execute in the package root!
+
 You can run the server using Docker with the following command:
 
 ```bash
